@@ -25,7 +25,7 @@ where
         let mut i = i + 1;
         while i < self.buf.len() {
             self.buf[i] += delta;
-            i += i - (i & i - 1);
+            i += i - (i & (i - 1));
         }
     }
 
@@ -38,7 +38,7 @@ where
         let mut ans = T::default();
         while i > 0 {
             ans += self.buf[i];
-            i = i & i - 1;
+            i = i & (i - 1);
         }
         ans
     }
