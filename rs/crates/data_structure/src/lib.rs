@@ -1,23 +1,38 @@
 #![allow(unused_imports)]
 
-pub mod binary_tree;
-pub mod bitree;
-pub mod dsu;
-pub mod leftist_tree;
-pub mod rbtree;
-pub mod segment_tree;
-pub mod skip_list;
-pub mod sparse_table;
-pub mod splay_tree;
-pub mod stream;
-pub mod treap;
-pub use bitree::BIT;
-pub use leftist_tree::LeftistTree;
-pub use rbtree::RBTreeMap;
-pub use segment_tree::{PstSegTree, SegTree};
-pub use skip_list::SkipListSet;
-pub use splay_tree::SplayTreeMap;
-pub use treap::TreapMap;
+pub mod trees {
+    pub mod binary_tree;
+    pub mod bitree;
+    pub mod leftist_tree;
+    pub mod rbtree;
+    pub mod segment_tree;
+    pub mod splay_tree;
+    pub mod treap;
+}
+
+pub mod lists {
+    pub mod linkedlist;
+    pub mod skip_list;
+}
+
+pub mod graphs {
+    pub mod dsu;
+    pub mod tarjan;
+}
+
+pub mod misc {
+    pub mod sparse_table;
+    pub mod median_finder;
+    pub mod stream;
+}
+
+pub use trees::bitree::BIT;
+pub use trees::leftist_tree::LeftistTree;
+pub use trees::rbtree::RBTreeMap;
+pub use trees::segment_tree::{PstSegTree, SegTree};
+pub use lists::skip_list::SkipListSet;
+pub use trees::splay_tree::SplayTreeMap;
+pub use trees::treap::TreapMap;
 
 #[allow(unused_macros)]
 macro_rules! timeit {
@@ -71,12 +86,12 @@ mod tests {
 
     use super::*;
     use rand::prelude::*;
-    use skip_list::SkipListMap;
+    use crate::lists::skip_list::SkipListMap;
     use std::{
         collections::{BTreeMap, BTreeSet, BinaryHeap},
         time,
     };
-    use treap::TreapSet;
+    use crate::trees::treap::TreapSet;
 
     #[test]
     fn test_leftist_tree() {
@@ -284,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_st() {
-        let st = sparse_table::SparseTable::new(&[1, 0, 3, 0, 5, 0]);
+        let st = crate::misc::sparse_table::SparseTable::new(&[1, 0, 3, 0, 5, 0]);
         assert_eq!(st.query(0, 6), 0);
         assert_eq!(st.query(0, 1), 1);
         assert_eq!(st.query(2, 4), 0);
