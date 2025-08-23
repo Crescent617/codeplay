@@ -44,6 +44,12 @@ impl<K, V> Node<K, V> {
     // fn iter(&self) -> tree::InorderIter<>
 }
 
+impl<T: Ord> Default for TreapSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Ord> TreapSet<T> {
     pub fn new() -> Self {
         Self {
@@ -77,6 +83,12 @@ impl<T: Ord> TreapSet<T> {
 impl<T: Add<Output = T> + Ord + Unit + Clone> TreapSet<T> {
     pub fn remove(&mut self, elem: &T) -> bool {
         self.map.remove(elem)
+    }
+}
+
+impl<K, V> Default for TreapMap<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -126,20 +138,20 @@ impl<K: Ord, V> TreapMap<K, V> {
         }
 
         Self {
-            root: stk.first().map(|x| *x),
+            root: stk.first().copied(),
             _marker: PhantomData
         }
     }
 
     fn split_node(mut node: Edge<K, V>, key: &K) -> (Edge<K, V>, Edge<K, V>) {
         if let Some(nd) = &mut node {
-            let mut n = unsafe { nd.as_mut() };
+            let n = unsafe { nd.as_mut() };
             if &n.key < key {
-                let (lt, ge) = Self::split_node(n.right.take(), &key);
+                let (lt, ge) = Self::split_node(n.right.take(), key);
                 n.right = lt;
                 (node, ge)
             } else {
-                let (lt, ge) = Self::split_node(n.left.take(), &key);
+                let (lt, ge) = Self::split_node(n.left.take(), key);
                 n.left = ge;
                 (lt, node)
             }
@@ -152,11 +164,11 @@ impl<K: Ord, V> TreapMap<K, V> {
         if let (Some(a), Some(b)) = (&mut node1, &mut node2) {
             unsafe {
                 if a.as_ref().pri > b.as_ref().pri {
-                    let mut bow_a = a.as_mut();
+                    let bow_a = a.as_mut();
                     bow_a.right = Self::merge_node(bow_a.right.take(), node2);
                     node1
                 } else {
-                    let mut bow_b = b.as_mut();
+                    let bow_b = b.as_mut();
                     bow_b.left = Self::merge_node(node1, bow_b.left.take());
                     node2
                 }
@@ -166,7 +178,7 @@ impl<K: Ord, V> TreapMap<K, V> {
         }
     }
 
-    pub fn get<'a, 'b>(&'a self, key: &'b K) -> Option<&'a V> {
+    pub fn get<'a>(&'a self, key: &K) -> Option<&'a V> {
         let mut p = self.root.as_ref();
         while let Some(r) = p {
             let b = unsafe { r.as_ref() };
@@ -194,12 +206,12 @@ impl<K: Ord, V> TreapMap<K, V> {
 impl<K, V> Drop for TreapMap<K, V> {
     fn drop(&mut self) {
         let mut s = vec![];
-        self.root.map(|x| s.push(x));
+        if let Some(x) = self.root { s.push(x) }
 
         while let Some(x) = s.pop() {
             let node = unsafe { Box::from_raw(x.as_ptr()) };
-            node.left.map(|u| s.push(u));
-            node.right.map(|u| s.push(u));
+            if let Some(u) = node.left { s.push(u) }
+            if let Some(u) = node.right { s.push(u) }
         }
     }
 }
@@ -210,7 +222,7 @@ pub trait Unit {
 
 impl<K: Add<Output = K> + Ord + Unit + Clone, V> TreapMap<K, V> {
     pub fn remove(&mut self, key: &K) -> bool {
-        if self.get(&key).is_none() {
+        if self.get(key).is_none() {
             return false;
         }
         let (l, r) = Self::split_node(self.root.take(), key);

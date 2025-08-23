@@ -29,7 +29,7 @@ where
 
     fn cons(data: Vec<T>, size: usize, op: F) -> Self {
         let bit_num = mem::size_of::<usize>() * 8;
-        let offset = 1 << bit_num - size.leading_zeros() as usize;
+        let offset = 1 << (bit_num - size.leading_zeros() as usize);
         debug_assert!(offset >= size);
 
         let mut buf = Vec::with_capacity(offset * 2);
@@ -195,14 +195,14 @@ where
         let mid = (begin + end) >> 1;
 
         if key <= mid {
-            node.map(|x| new_nd.set_right(x.right.clone()));
+            if let Some(x) = node { new_nd.set_right(x.right.clone()) }
 
             let mut left = Node::new(val, begin, mid);
             self.insert_node(&mut left, node.and_then(|x| x.left.as_ref()), key, val);
 
             new_nd.set_left(left.wrap());
         } else {
-            node.map(|x| new_nd.set_left(x.left.clone()));
+            if let Some(x) = node { new_nd.set_left(x.left.clone()) }
 
             let mut right = Node::new(val, mid + 1, end);
             self.insert_node(&mut right, node.and_then(|x| x.right.as_ref()), key, val);

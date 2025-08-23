@@ -90,10 +90,10 @@ impl<K, V> Node<K, V> {
         pre
     }
 
-    unsafe fn refresh_size(&mut self) {
+    unsafe fn refresh_size(&mut self) { unsafe {
         let f = |u: Link<K, V>| u.map_or(0, |x| x.as_ref().size);
         self.size = 1 + f(self.left) + f(self.right);
-    }
+    }}
 
     fn take_left(&mut self) -> Link<K, V> {
         self.left.map(|x| unsafe { self.size -= x.as_ref().size });
@@ -135,7 +135,7 @@ impl<K, V> Node<K, V> {
         self.color = new_color;
     }
 
-    unsafe fn flip_colors(&mut self) {
+    unsafe fn flip_colors(&mut self) { unsafe {
         let mut left = self.left.expect("left must exist");
         let mut right = self.right.expect("left must exist");
         debug_assert_eq!(left.as_ref().color, right.as_ref().color);
@@ -144,9 +144,9 @@ impl<K, V> Node<K, V> {
         self.flip_color();
         right.as_mut().flip_color();
         left.as_mut().flip_color();
-    }
+    }}
 
-    unsafe fn left_rotate(&mut self) -> Link<K, V> {
+    unsafe fn left_rotate(&mut self) -> Link<K, V> { unsafe {
         // left rotate a red link
         //          <1>                   <2>
         //        /    \\               //    \
@@ -160,9 +160,9 @@ impl<K, V> Node<K, V> {
                 .replace_left(NonNull::new_unchecked(self as *mut Self));
             par
         })
-    }
+    }}
 
-    unsafe fn right_rotate(&mut self) -> Link<K, V> {
+    unsafe fn right_rotate(&mut self) -> Link<K, V> { unsafe {
         // right rotate a red link
         //            <1>               <2>
         //          //    \           /    \\
@@ -176,6 +176,12 @@ impl<K, V> Node<K, V> {
                 .replace_right(NonNull::new_unchecked(self as *mut Self));
             par
         })
+    }}
+}
+
+impl<K: Ord, V> Default for RBTreeMap<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -194,11 +200,11 @@ impl<K: Ord, V> RBTreeMap<K, V> {
     pub fn insert(&mut self, key: K, val: V) {
         unsafe {
             self.root.replace(Self::insert_node(self.root, key, val));
-            self.root.map(|mut x| x.as_mut().set_black());
+            if let Some(mut x) = self.root { x.as_mut().set_black() }
         }
     }
 
-    unsafe fn insert_node(node: Link<K, V>, key: K, val: V) -> NonNull<Node<K, V>> {
+    unsafe fn insert_node(node: Link<K, V>, key: K, val: V) -> NonNull<Node<K, V>> { unsafe {
         if let Some(mut nd) = node {
             let p = nd.as_mut();
             match p.key.cmp(&key) {
@@ -214,15 +220,15 @@ impl<K: Ord, V> RBTreeMap<K, V> {
         } else {
             Node::new(key, val).wrap()
         }
-    }
+    }}
 
-    unsafe fn fixup(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> {
+    unsafe fn fixup(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> { unsafe {
         if !Self::is_some_red(node.as_ref().left) && Self::is_some_red(node.as_ref().right) {
             node = node.as_mut().left_rotate().expect("must exist");
         }
 
         let left = node.as_ref().left;
-        if Self::is_some_red(left) && left.map_or(false, |l| Self::is_some_red(l.as_ref().left)) {
+        if Self::is_some_red(left) && left.is_some_and(|l| Self::is_some_red(l.as_ref().left)) {
             node = node.as_mut().right_rotate().expect("must exist");
         }
 
@@ -232,13 +238,13 @@ impl<K: Ord, V> RBTreeMap<K, V> {
         }
         node.as_mut().refresh_size();
         node
-    }
+    }}
 
     pub fn get(&self, key: &K) -> Option<&V> {
         let mut cur = self.root;
         while let Some(p) = cur {
             unsafe {
-                match p.as_ref().key.cmp(&key) {
+                match p.as_ref().key.cmp(key) {
                     Ordering::Equal => return Some(&(*p.as_ptr()).val),
                     Ordering::Greater => cur = p.as_ref().left,
                     Ordering::Less => cur = p.as_ref().right,
@@ -249,7 +255,7 @@ impl<K: Ord, V> RBTreeMap<K, V> {
     }
 
     fn is_some_red(node: Link<K, V>) -> bool {
-        node.map_or(false, |x| unsafe { x.as_ref().is_red() })
+        node.is_some_and(|x| unsafe { x.as_ref().is_red() })
     }
 
     pub fn remove(&mut self, key: &K) -> bool {
@@ -263,14 +269,14 @@ impl<K: Ord, V> RBTreeMap<K, V> {
                         root.as_mut().set_red();
                     }
                     self.root = Self::_remove(root, key);
-                    self.root.map(|mut x| x.as_mut().set_black());
+                    if let Some(mut x) = self.root { x.as_mut().set_black() }
                 }
             }
             true
         }
     }
 
-    unsafe fn move_red_left(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> {
+    unsafe fn move_red_left(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> { unsafe {
         node.as_mut().flip_colors();
         let mut r = node.as_ref().right.expect("must exist");
 
@@ -280,9 +286,9 @@ impl<K: Ord, V> RBTreeMap<K, V> {
             node.as_mut().flip_colors();
         }
         node
-    }
+    }}
 
-    unsafe fn move_red_right(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> {
+    unsafe fn move_red_right(mut node: NonNull<Node<K, V>>) -> NonNull<Node<K, V>> { unsafe {
         node.as_mut().flip_colors();
         let l = node.as_ref().left.expect("must exist");
 
@@ -291,14 +297,14 @@ impl<K: Ord, V> RBTreeMap<K, V> {
             node.as_mut().flip_colors();
         }
         node
-    }
+    }}
 
-    unsafe fn delete_node(node: NonNull<Node<K, V>>) {
+    unsafe fn delete_node(node: NonNull<Node<K, V>>) { unsafe {
         let b = Box::from_raw(node.as_ptr());
         debug_assert!(b.is_red());
-    }
+    }}
 
-    unsafe fn _remove(mut node: NonNull<Node<K, V>>, key: &K) -> Link<K, V> {
+    unsafe fn _remove(mut node: NonNull<Node<K, V>>, key: &K) -> Link<K, V> { unsafe {
         if key < &node.as_ref().key {
             let l = node.as_ref().left.expect("must exist");
 
@@ -335,17 +341,17 @@ impl<K: Ord, V> RBTreeMap<K, V> {
             p.right = Self::_remove(p.right.expect("must exist"), key);
         }
         Some(Self::fixup(node))
-    }
+    }}
 }
 
 impl<K, V> Drop for RBTreeMap<K, V> {
     fn drop(&mut self) {
         let mut s = vec![];
-        self.root.map(|x| s.push(x));
+        if let Some(x) = self.root { s.push(x) }
 
         while let Some(x) = s.pop() {
             let node = unsafe { Box::from_raw(x.as_ptr()) };
-            node.left.map(|u| s.push(u));
+            if let Some(u) = node.left { s.push(u) }
             node.right.map(|u| unsafe {
                 debug_assert!(!u.as_ref().is_red());
                 s.push(u);

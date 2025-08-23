@@ -196,8 +196,8 @@ mod tests {
 
         for _ in 0..n {
             let r = &rng.gen_range(i32::MIN..i32::MAX);
-            assert_eq!(b.remove(&r), tr.remove(&r));
-            assert_eq!(b.remove(&r), tr.remove(&r));
+            assert_eq!(b.remove(r), tr.remove(r));
+            assert_eq!(b.remove(r), tr.remove(r));
         }
     }
 

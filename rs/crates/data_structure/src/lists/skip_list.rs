@@ -17,6 +17,12 @@ pub struct SkipListSet<T> {
     map: SkipListMap<T, ()>,
 }
 
+impl<T: Ord> Default for SkipListSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Ord> SkipListSet<T> {
     pub fn new() -> Self {
         Self {
@@ -73,6 +79,12 @@ impl<K, V> Node<K, V> {
             l += 1;
         }
         l
+    }
+}
+
+impl<K: Ord, V> Default for SkipListMap<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -224,7 +236,7 @@ impl<K: Debug, V: Debug> Debug for SkipListMap<K, V> {
                 }
             }
 
-            write!(f, "... end, total {} elements.\n", cnt)?;
+            writeln!(f, "... end, total {} elements.", cnt)?;
         }
         write!(f, "")
     }

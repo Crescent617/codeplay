@@ -53,10 +53,10 @@ impl<K, V> Node<K, V> {
         }
     }
 
-    unsafe fn refresh_size(&mut self) {
+    unsafe fn refresh_size(&mut self) { unsafe {
         let f = |u: Link<K, V>| u.map_or(0, |x| x.as_ref().size);
         self.size = 1 + f(self.left) + f(self.right);
-    }
+    }}
 
     fn take_left(&mut self) -> Link<K, V> {
         self.left.map(|x| unsafe { self.size -= x.as_ref().size });
@@ -72,7 +72,7 @@ impl<K, V> Node<K, V> {
         self.left.is_none() && self.right.is_none()
     }
 
-    unsafe fn left_rotate(&mut self) -> Link<K, V> {
+    unsafe fn left_rotate(&mut self) -> Link<K, V> { unsafe {
         // left rotate a red link
         //          <1>                   <2>
         //        /    \\               //    \
@@ -85,9 +85,9 @@ impl<K, V> Node<K, V> {
                 .set_left(Some(NonNull::new_unchecked(self as *mut Self)));
             par
         })
-    }
+    }}
 
-    unsafe fn right_rotate(&mut self) -> Link<K, V> {
+    unsafe fn right_rotate(&mut self) -> Link<K, V> { unsafe {
         // right rotate a red link
         //            <1>               <2>
         //          //    \           /    \\
@@ -100,6 +100,12 @@ impl<K, V> Node<K, V> {
                 .set_right(Some(NonNull::new_unchecked(self as *mut Self)));
             par
         })
+    }}
+}
+
+impl<K: Ord, V> Default for SplayTreeMap<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -116,7 +122,7 @@ impl<K: Ord, V> SplayTreeMap<K, V> {
         self.root = unsafe { Self::insert_node(self.root, key, val) };
     }
 
-    unsafe fn insert_node(node: Link<K, V>, key: K, val: V) -> Link<K, V> {
+    unsafe fn insert_node(node: Link<K, V>, key: K, val: V) -> Link<K, V> { unsafe {
         if let Some(mut nd) = node {
             match nd.as_ref().key.cmp(&key) {
                 Ordering::Equal => {
@@ -137,7 +143,7 @@ impl<K: Ord, V> SplayTreeMap<K, V> {
         } else {
             Some(Node::new(key, val).wrap())
         }
-    }
+    }}
 
     pub fn get(&mut self, key: &K) -> Option<&V> {
         unsafe {
@@ -148,7 +154,7 @@ impl<K: Ord, V> SplayTreeMap<K, V> {
         }
     }
 
-    unsafe fn splay(node: Link<K, V>, key: &K) -> Link<K, V> {
+    unsafe fn splay(node: Link<K, V>, key: &K) -> Link<K, V> { unsafe {
         if let Some(mut nd) = node {
             match nd.as_ref().key.cmp(key) {
                 Ordering::Equal => node,
@@ -166,7 +172,7 @@ impl<K: Ord, V> SplayTreeMap<K, V> {
         } else {
             None
         }
-    }
+    }}
 
     pub fn remove(&mut self, key: &K) -> bool {
         if self.get(key).is_none() {
@@ -195,12 +201,12 @@ impl<K: Ord, V> SplayTreeMap<K, V> {
 impl<K, V> Drop for SplayTreeMap<K, V> {
     fn drop(&mut self) {
         let mut s = vec![];
-        self.root.map(|x| s.push(x));
+        if let Some(x) = self.root { s.push(x) }
 
         while let Some(x) = s.pop() {
             let node = unsafe { Box::from_raw(x.as_ptr()) };
-            node.left.map(|u| s.push(u));
-            node.right.map(|u| s.push(u));
+            if let Some(u) = node.left { s.push(u) }
+            if let Some(u) = node.right { s.push(u) }
         }
     }
 }

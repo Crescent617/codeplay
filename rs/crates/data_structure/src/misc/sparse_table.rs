@@ -29,7 +29,7 @@ impl SparseTable {
         let n = j - i;
         let d = Self::log2(n);
         let m = j - Self::pow2(d);
-        return self.tab[i][d].min(self.tab[m][d]);
+        self.tab[i][d].min(self.tab[m][d])
     }
 
     fn pow2(n: usize) -> usize {

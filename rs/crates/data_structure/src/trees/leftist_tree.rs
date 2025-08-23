@@ -27,6 +27,12 @@ impl<T: Ord> Node<T> {
     }
 }
 
+impl<T: Ord> Default for LeftistTree<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Ord> LeftistTree<T> {
     pub fn new() -> Self {
         Self {
@@ -115,6 +121,12 @@ impl<T> PstNode<T> {
             right: None,
             dist: 0,
         }
+    }
+}
+
+impl<T: Ord + Clone> Default for PstLeftistTree<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

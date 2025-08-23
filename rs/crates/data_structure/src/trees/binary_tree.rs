@@ -19,7 +19,7 @@ pub trait BinaryTree {
 
     fn into_iter(&mut self) -> IntoIter<Self::Node> {
         let mut stack = vec![];
-        self.mut_root().take().map(|x| stack.push(x));
+        if let Some(x) = self.mut_root().take() { stack.push(x) }
         IntoIter {
             stack,
             _marker: PhantomData,
@@ -84,7 +84,7 @@ impl<N: BinaryTreeNode> Iterator for IntoIter<N> {
         }
         if let Some(last) = self.stack.pop() {
             let mut b = unsafe { Box::from_raw(last.as_ptr()) };
-            b.mut_right().take().map(|x| self.stack.push(x));
+            if let Some(x) = b.mut_right().take() { self.stack.push(x) }
             Some(b.move_kv())
         } else {
             None

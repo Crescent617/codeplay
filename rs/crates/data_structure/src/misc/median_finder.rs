@@ -63,17 +63,17 @@ impl MedianFinder {
 
     #[inline]
     fn peek_outdated(&self, val: Option<&i32>) -> Option<i32> {
-        val.filter(|x| self.outdated.get(x) > Some(&0)).map(|x| *x)
+        val.filter(|x| self.outdated.get(x) > Some(&0)).copied()
     }
 
     fn make_balance(&mut self) {
         self.prune();
         if self.small_size > self.large_size + 1 {
-            self.small.pop().map(|x| self.large.push(Reverse(x)));
+            if let Some(x) = self.small.pop() { self.large.push(Reverse(x)) }
             self.small_size -= 1;
             self.large_size += 1;
         } else if self.small_size < self.large_size {
-            self.large.pop().map(|x| self.small.push(x.0));
+            if let Some(x) = self.large.pop() { self.small.push(x.0) }
             self.small_size += 1;
             self.large_size -= 1;
         }
