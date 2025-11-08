@@ -34,6 +34,7 @@ fn main() {
     let text = "Hello, world!\nThis is a test.\nLending iterators are cool!";
     let mut lines = Lines { data: text, pos: 0 };
 
+    std::collections
     while let Some(line) = lines.next() {
         println!("{}", line);
     }
