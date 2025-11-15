@@ -31,7 +31,7 @@ func minimumSubstringsInPartition(s string) int {
 		return 0
 	}
 	dp := make([]int, n)
-	for i := range n {
+	for i := range dp {
 		dp[i] = -1
 	}
 	dp[0] = 1
@@ -54,6 +54,20 @@ func minimumSubstringsInPartition(s string) int {
 	return dp[n-1]
 }
 
-func main() {
-	minimumSubstringsInPartition("abababaccddb")
+type Point3d struct {
+	x, y, z int
 }
+
+func (p Point3d) add(q Point3d) Point3d {
+	return Point3d{p.x + q.x, p.y + q.y, p.z + q.z}
+}
+
+func (p Point3d) subtract(q Point3d) Point3d {
+	return Point3d{p.x - q.x, p.y - q.y, p.z - q.z}
+}
+
+func (p Point3d) dot(q Point3d) int {
+	return p.x*q.x + p.y*q.y + p.z*q.z
+}
+
+

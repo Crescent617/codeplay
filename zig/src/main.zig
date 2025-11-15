@@ -1,78 +1,41 @@
 const std = @import("std");
 const zig = @import("zig");
-
-const ShapeVTable = struct {
-    area: *const fn (*const Shape) f64,
-};
-
-const Shape = struct {
-    vtable: *const ShapeVTable,
-
-    fn area(self: *const Shape) f64 {
-        return self.vtable.area(self);
-    }
-};
-
-const Shape2 = struct {
-    ctx: *anyopaque,
-    vtable: *const struct {
-        area: *const fn (self: *anyopaque) f64,
-    },
-
-    fn area(self: *const Shape2) f64 {
-        return self.vtable.area(self.ctx);
-    }
-};
-
-const Circle = struct {
-    radius: f64,
-    interface: Shape,
-
-    fn area(shape: *const Shape) f64 {
-        const self: *const Circle = @fieldParentPtr("interface", shape);
-        return std.math.pi * self.radius * self.radius;
-    }
-
-    fn init(radius: f64) Circle {
-        return .{
-            .radius = radius,
-            .interface = .{ .vtable = &.{
-                .area = area,
-            } },
-        };
-    }
-
-    fn area2(self: *const anyopaque) f64 {
-        const self_circle: *const Circle = @ptrCast(@alignCast(self));
-        return std.math.pi * self_circle.radius * self_circle.radius;
-    }
-
-    fn asShape(self: *Circle) Shape2 {
-        return Shape2{
-            .ctx = self,
-            .vtable = &.{
-                .area = area2,
-            },
-        };
-    }
-};
+const clap = @import("clap");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    const alloc = gpa.allocator();
+    // First we specify what parameters our program can take.
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`.
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-n, --number <usize>   An option parameter, which takes a value.
+        \\-s, --string <str>...  An option parameter which can be specified multiple times.
+        \\<str>...
+        \\
+    );
 
-    var my_circle = try alloc.create(Circle);
-    defer alloc.destroy(my_circle);
+    // Initialize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also pass `.{}` to `clap.parse` if you don't
+    // care about the extra information `Diagnostic` provides.
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = gpa.allocator(),
+    }) catch |err| {
+        // Report useful error and exit.
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    };
+    defer res.deinit();
 
-    my_circle.* = Circle.init(5.0);
-
-    const area = my_circle.interface.area();
-    std.debug.print("Area of the circle: {}\n", .{area});
-
-    const shape2 = my_circle.asShape();
-    const area2 = shape2.area();
-    std.debug.print("Area of the circle (Shape2): {}\n", .{area2});
+    if (res.args.help != 0)
+        std.debug.print("--help\n", .{});
+    if (res.args.number) |n|
+        std.debug.print("--number = {}\n", .{n});
+    for (res.args.string) |s|
+        std.debug.print("--string = {s}\n", .{s});
+    for (res.positionals[0]) |pos|
+        std.debug.print("{s}\n", .{pos});
 }

@@ -153,4 +153,6 @@ pub fn build(b: *std.Build) void {
     //
     // Lastly, the Zig build system is relatively simple and self-contained,
     // and reading its source code will allow you to master it.
+    const clap = b.dependency("clap", .{});
+    exe.root_module.addImport("clap", clap.module("clap"));
 }
