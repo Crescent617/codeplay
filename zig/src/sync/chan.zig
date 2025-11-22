@@ -4,12 +4,16 @@ pub const ChanErr = error{
     ChannelClosed,
 };
 
+pub fn ReceiverVTable(comptime T: type) type {
+    return struct {
+        recv: *const fn (self: *anyopaque) ?T,
+    };
+}
+
 pub fn Receiver(comptime T: type) type {
     return struct {
         ctx: *anyopaque,
-        vtable: *const struct {
-            recv: *const fn (self: *anyopaque) ?T,
-        },
+        vtable: *const ReceiverVTable(T),
 
         pub fn recv(self: *@This()) ?T {
             return self.vtable.recv(self.ctx);
@@ -17,12 +21,16 @@ pub fn Receiver(comptime T: type) type {
     };
 }
 
+pub fn SenderVTable(comptime T: type) type {
+    return struct {
+        send: *const fn (self: *anyopaque, v: T) ChanErr!void,
+    };
+}
+
 pub fn Sender(comptime T: type) type {
     return struct {
         ctx: *anyopaque,
-        vtable: *const struct {
-            send: *const fn (self: *anyopaque, v: T) ChanErr!void,
-        },
+        vtable: *const SenderVTable(T),
 
         pub fn send(self: *@This(), v: T) ChanErr!void {
             return self.vtable.send(self.ctx, v);
@@ -33,6 +41,13 @@ pub fn Sender(comptime T: type) type {
 pub fn Chan(comptime T: type) type {
     return struct {
         const Self = @This();
+
+        const rx_vt: *const ReceiverVTable(T) = &.{
+            .recv = recv,
+        };
+        const tx_vt: *const SenderVTable(T) = &.{
+            .send = send,
+        };
 
         mutex: std.Thread.Mutex = .{},
         send_cv: std.Thread.Condition = .{},
@@ -113,14 +128,14 @@ pub fn Chan(comptime T: type) type {
         pub fn rx(self: *Self) Receiver(T) {
             return .{
                 .ctx = self,
-                .vtable = &.{ .recv = recv },
+                .vtable = rx_vt,
             };
         }
 
         pub fn tx(self: *Self) Sender(T) {
             return .{
                 .ctx = self,
-                .vtable = &.{ .send = send },
+                .vtable = tx_vt,
             };
         }
 
