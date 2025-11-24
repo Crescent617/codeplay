@@ -13,7 +13,7 @@ pub fn Receiver(comptime T: type) type {
         pub fn recv(self: @This()) ?T {
             return self.ch.recv();
         }
-        pub fn release(self: @This(), allocator: std.mem.Allocator) void {
+        pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
             self.ch.release(allocator);
         }
         pub fn clone(self: @This()) @This() {
@@ -30,7 +30,7 @@ pub fn Sender(comptime T: type) type {
         pub fn send(self: @This(), v: T) void {
             return self.ch.send(v);
         }
-        pub fn release(self: @This(), allocator: std.mem.Allocator) void {
+        pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
             if (self.ch.tx_ref_cnt.fetchSub(1, .acq_rel) == 1) {
                 self.ch.close();
             }
@@ -47,13 +47,13 @@ pub fn Sender(comptime T: type) type {
 pub fn Chan(comptime T: type) type {
     return struct {
         const Self = @This();
-        const Pair = struct {
+        const Pipe = struct {
             tx: Sender(T),
             rx: Receiver(T),
 
-            pub fn release(self: *Pair, allocator: std.mem.Allocator) void {
-                self.tx.release(allocator);
-                self.rx.release(allocator);
+            pub fn deinit(self: *Pipe, allocator: std.mem.Allocator) void {
+                self.tx.deinit(allocator);
+                self.rx.deinit(allocator);
             }
         };
         const MAX_SPINS: u32 = 512;
@@ -69,7 +69,7 @@ pub fn Chan(comptime T: type) type {
 
         queue: *queue.BoundedQueue(T),
 
-        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Pair {
+        pub fn init(allocator: std.mem.Allocator, capacity: usize) !Pipe {
             const self = try allocator.create(Self);
             errdefer allocator.destroy(self);
             self.* = .{
@@ -201,13 +201,13 @@ pub fn Chan(comptime T: type) type {
 test "init and deinit chan" {
     const allocator = std.testing.allocator;
     var pair = try Chan(i32).init(allocator, 10);
-    pair.release(allocator);
+    pair.deinit(allocator);
 }
 
 test "basic send and receive" {
     const allocator = std.testing.allocator;
     var pair = try Chan(i32).init(allocator, 5);
-    defer pair.release(allocator);
+    defer pair.deinit(allocator);
 
     // Test basic send/receive
     pair.tx.send(42);
@@ -226,15 +226,15 @@ test "basic send and receive" {
 test "channel cloning" {
     const allocator = std.testing.allocator;
     var pair = try Chan(i32).init(allocator, 5);
-    defer pair.release(allocator);
+    defer pair.deinit(allocator);
 
     // Clone sender
     var tx2 = pair.tx.clone();
-    defer tx2.release(allocator);
+    defer tx2.deinit(allocator);
 
     // Clone receiver
     var rx2 = pair.rx.clone();
-    defer rx2.release(allocator);
+    defer rx2.deinit(allocator);
 
     // Test that cloned channels work
     tx2.send(123);
@@ -246,13 +246,13 @@ test "channel closing" {
     var pair = try Chan(i32).init(allocator, 5);
 
     // Release sender (this should close the channel)
-    pair.tx.release(allocator);
+    pair.tx.deinit(allocator);
 
     // Try to receive from closed channel
     try testing.expectEqual(@as(?i32, null), pair.rx.recv());
 
     // Now release receiver
-    pair.rx.release(allocator);
+    pair.rx.deinit(allocator);
 }
 
 test "multiple senders closing" {
@@ -264,20 +264,20 @@ test "multiple senders closing" {
     var tx3 = pair.tx.clone();
 
     // Release original sender
-    pair.tx.release(allocator);
+    pair.tx.deinit(allocator);
 
     // Channel should still be open (tx2 and tx3 exist)
     tx2.send(42);
     try testing.expectEqual(@as(i32, 42), pair.rx.recv());
 
     // Release all senders
-    tx2.release(allocator);
-    tx3.release(allocator);
+    tx2.deinit(allocator);
+    tx3.deinit(allocator);
 
     // Now channel should be closed
     try testing.expectEqual(@as(?i32, null), pair.rx.recv());
 
-    pair.rx.release(allocator);
+    pair.rx.deinit(allocator);
 }
 
 test "different types" {
@@ -286,7 +286,7 @@ test "different types" {
     // Test with different types
     {
         var pair = try Chan(f64).init(allocator, 5);
-        defer pair.release(allocator);
+        defer pair.deinit(allocator);
 
         pair.tx.send(3.14);
         try testing.expectEqual(@as(f64, 3.14), pair.rx.recv());
@@ -294,7 +294,7 @@ test "different types" {
 
     {
         var pair = try Chan([]const u8).init(allocator, 5);
-        defer pair.release(allocator);
+        defer pair.deinit(allocator);
 
         pair.tx.send("hello");
         try testing.expectEqualStrings("hello", pair.rx.recv().?);
@@ -303,7 +303,7 @@ test "different types" {
 
 test "concurrent send and receive" {
     const allocator = std.testing.allocator;
-    var ch = try Chan(u64).init(allocator, 100);
+    var pipe = try Chan(u64).init(allocator, 100);
 
     const num_items = 1000;
 
@@ -313,17 +313,17 @@ test "concurrent send and receive" {
     // Spawn sender thread
     const sender = try std.Thread.spawn(.{}, struct {
         fn f(ally: std.mem.Allocator, tx: Sender(u64)) void {
-            defer tx.release(ally);
+            defer tx.deinit(ally);
             for (0..num_items) |i| {
                 tx.send(@as(u64, i));
             }
         }
-    }.f, .{ allocator, ch.tx.clone() });
+    }.f, .{ allocator, pipe.tx.clone() });
 
     // Spawn receiver thread
     const receiver = try std.Thread.spawn(.{}, struct {
         fn f(ally: std.mem.Allocator, rx: Receiver(u64), sum: *u64) void {
-            defer rx.release(ally);
+            defer rx.deinit(ally);
 
             var local_sum: u64 = 0;
             var received_count: usize = 0;
@@ -336,9 +336,9 @@ test "concurrent send and receive" {
             }
             sum.* = local_sum;
         }
-    }.f, .{ allocator, ch.rx.clone(), &recv_sum });
+    }.f, .{ allocator, pipe.rx.clone(), &recv_sum });
 
-    ch.release(allocator);
+    pipe.deinit(allocator);
     sender.join();
     receiver.join();
 
