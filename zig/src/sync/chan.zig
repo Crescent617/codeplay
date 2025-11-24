@@ -8,16 +8,16 @@ pub const ChanErr = error{
 
 pub fn Receiver(comptime T: type) type {
     return struct {
-        ch: *Chan(T),
+        ch: *const Chan(T),
 
         pub fn recv(self: @This()) ?T {
-            return self.ch.recv();
+            return @constCast(self.ch).recv();
         }
         pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-            self.ch.release(allocator);
+            @constCast(self.ch).release(allocator);
         }
         pub fn clone(self: @This()) @This() {
-            _ = self.ch.ref_cnt.fetchAdd(1, .acq_rel);
+            _ = @constCast(self.ch).ref_cnt.fetchAdd(1, .acq_rel);
             return self;
         }
     };
@@ -25,20 +25,22 @@ pub fn Receiver(comptime T: type) type {
 
 pub fn Sender(comptime T: type) type {
     return struct {
-        ch: *Chan(T),
+        ch: *const Chan(T),
 
         pub fn send(self: @This(), v: T) void {
-            return self.ch.send(v);
+            return @constCast(self.ch).send(v);
         }
         pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-            if (self.ch.tx_ref_cnt.fetchSub(1, .acq_rel) == 1) {
-                self.ch.close();
+            const p = @constCast(self.ch);
+            if (p.tx_ref_cnt.fetchSub(1, .acq_rel) == 1) {
+                p.close();
             }
-            self.ch.release(allocator);
+            p.release(allocator);
         }
         pub fn clone(self: @This()) @This() {
-            _ = self.ch.ref_cnt.fetchAdd(1, .acq_rel);
-            _ = self.ch.tx_ref_cnt.fetchAdd(1, .acq_rel);
+            const p = @constCast(self.ch);
+            _ = p.ref_cnt.fetchAdd(1, .acq_rel);
+            _ = p.tx_ref_cnt.fetchAdd(1, .acq_rel);
             return self;
         }
     };
