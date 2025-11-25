@@ -5,11 +5,10 @@ const QueueError = error{
 };
 
 pub fn BoundedQueue(comptime T: type) type {
-    // For our benchmarks (T == u64) make each cell occupy a full 64-byte cache line
-    // layout: seq (64 bytes) | data (T) | padding
     return struct {
         const Self = @This();
 
+        /// padding for CPU cache line alignment
         const Slot = struct {
             seq: std.atomic.Value(u64) align(64),
             data: T,

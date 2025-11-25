@@ -348,3 +348,59 @@ test "concurrent send and receive" {
     const expected_sum = (num_items * (num_items - 1)) / 2;
     try testing.expectEqual(expected_sum, recv_sum);
 }
+
+test "stress test high contention" {
+    const allocator = std.testing.allocator;
+    var pipe = try Chan(u16).init(allocator, 5); // Small buffer to create contention
+
+    const num_threads = 10;
+    const operations_per_sender = 100;
+
+    // Shared result storage
+    var total_sent: std.atomic.Value(u32) = std.atomic.Value(u32).init(0);
+    var total_received: std.atomic.Value(u32) = std.atomic.Value(u32).init(0);
+
+    // Spawn threads that both send and receive
+    var threads: [num_threads]std.Thread = undefined;
+    for (0..num_threads) |i| {
+        threads[i] = try std.Thread.spawn(.{}, struct {
+            fn f(ally: std.mem.Allocator, tx: Sender(u16), rx: Receiver(u16), sent: *std.atomic.Value(u32), received: *std.atomic.Value(u32), idx: usize) void {
+                if (idx % 3 > 0) {
+                    // Even indexed threads send first
+                    rx.deinit(ally); // Even indexed threads send first
+                    defer tx.deinit(ally);
+
+                    for (0..operations_per_sender) |j| {
+                        tx.send(@intCast(j));
+                        _ = sent.fetchAdd(1, .acq_rel);
+                    }
+                } else {
+                    tx.deinit(ally); // Odd indexed threads receive first
+                    defer rx.deinit(ally);
+
+                    while (rx.recv()) |_| {
+                        _ = received.fetchAdd(1, .acq_rel);
+                    }
+                }
+            }
+        }.f, .{ allocator, pipe.tx.clone(), pipe.rx.clone(), &total_sent, &total_received, i });
+    }
+
+    // Clean up original pipe
+    pipe.deinit(allocator);
+
+    // Wait for all threads to finish
+    for (&threads) |thread| {
+        thread.join();
+    }
+
+    // In this stress test, we mainly verify that no deadlocks occurred
+    // and that some operations completed successfully
+    const sent_count = total_sent.load(.acquire);
+    const received_count = total_received.load(.acquire);
+
+    // We should have sent some items and received some items
+    try testing.expect(sent_count > 0);
+    try testing.expect(received_count > 0);
+    try testing.expect(received_count == sent_count);
+}
