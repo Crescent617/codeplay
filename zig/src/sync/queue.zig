@@ -18,8 +18,8 @@ pub fn BoundedQueue(comptime T: type) type {
         capacity: usize,
         mask: usize,
         buffer: []Slot,
-        enqueue_pos: std.atomic.Value(u64) align(64) = .init(0),
-        dequeue_pos: std.atomic.Value(u64) align(64) = .init(0),
+        head: std.atomic.Value(u64) align(64) = .init(0), // producer index
+        tail: std.atomic.Value(u64) align(64) = .init(0), // consumer index
 
         pub fn init(alloc: std.mem.Allocator, cap: usize) !*Self {
             const real_cap = std.math.ceilPowerOfTwo(usize, cap) catch unreachable;
@@ -51,13 +51,13 @@ pub fn BoundedQueue(comptime T: type) type {
         pub fn tryEnqueue(self: *Self, value: T) bool {
             // Attempt to reserve a position if available by reading enqueue_pos and checking slot seq
             while (true) {
-                const pos = self.enqueue_pos.load(.acquire);
+                const pos = self.head.load(.acquire);
                 const idx = (@as(usize, pos) & self.mask);
                 var cell = &self.buffer[idx];
                 const seq = cell.seq.load(.acquire);
 
                 if (seq == pos) {
-                    const canEnqueue = self.enqueue_pos.cmpxchgWeak(pos, pos + 1, .acq_rel, .acquire) == null;
+                    const canEnqueue = self.head.cmpxchgWeak(pos, pos + 1, .acq_rel, .acquire) == null;
                     if (canEnqueue) {
                         cell.data = value;
                         cell.seq.store(pos + 1, .release);
@@ -72,14 +72,14 @@ pub fn BoundedQueue(comptime T: type) type {
 
         pub fn tryDequeue(self: *Self) ?T {
             while (true) {
-                const pos = self.dequeue_pos.load(.acquire);
+                const pos = self.tail.load(.acquire);
                 const idx = (@as(usize, pos) & self.mask);
                 var cell = &self.buffer[idx];
                 const seq = cell.seq.load(.acquire);
                 const expected = pos + 1;
 
                 if (seq == expected) {
-                    const canDequeue = self.dequeue_pos.cmpxchgWeak(pos, pos + 1, .acq_rel, .acquire) == null;
+                    const canDequeue = self.tail.cmpxchgWeak(pos, pos + 1, .acq_rel, .acquire) == null;
                     if (canDequeue) {
                         cell.seq.store(pos + @as(u64, self.capacity), .release);
                         return cell.data;
@@ -109,8 +109,8 @@ pub fn BoundedQueue(comptime T: type) type {
         }
 
         pub fn count(self: *Self) usize {
-            const enq = self.enqueue_pos.load(.acquire);
-            const deq = self.dequeue_pos.load(.acquire);
+            const enq = self.head.load(.acquire);
+            const deq = self.tail.load(.acquire);
             return @as(usize, enq - deq);
         }
     };
